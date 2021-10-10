@@ -1,0 +1,34 @@
+{
+    "tasks": [
+        {
+            "type": "cppbuild",
+            "label": "make-gdb",
+            "command": "/usr/bin/gdb-multiarch",
+            "args": [
+                "-g",
+                "${file}",
+                "-o",
+                "${fileDirname}/${fileBasenameNoExtension}"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "detail": "调试器生成的任务。"
+        },
+        {
+            "label": "makegdb",
+            "command": "make",
+            "args": ["qemu-gdb"],
+            "isBackground": true
+        }
+
+    ],
+    "version": "2.0.0"
+}
