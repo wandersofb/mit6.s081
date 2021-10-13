@@ -13,6 +13,7 @@ struct proc proc[NPROC];
 struct proc *initproc;
 
 int nextpid = 1;
+
 struct spinlock pid_lock;
 
 extern void forkret(void);
@@ -127,6 +128,7 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+
   return p;
 }
 
@@ -150,6 +152,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+
 }
 
 // Create a user page table for a given process,
@@ -262,6 +265,10 @@ fork(void)
   struct proc *np;
   struct proc *p = myproc();
 
+  //Copy trace mask
+    
+  
+
   // Allocate process.
   if((np = allocproc()) == 0){
     return -1;
@@ -290,6 +297,7 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   safestrcpy(np->name, p->name, sizeof(p->name));
+  np->mask = p->mask;
 
   pid = np->pid;
 
@@ -632,6 +640,7 @@ kill(int pid)
     }
     release(&p->lock);
   }
+
   return -1;
 }
 
@@ -692,4 +701,17 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+nproc(void)
+{
+  uint64 n = 0;
+  struct proc *p;
+  for(p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if(p->state != UNUSED) n++;
+    release(&p->lock);
+  }
+  return n;
 }
