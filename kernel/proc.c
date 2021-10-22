@@ -40,6 +40,7 @@ procinit(void)
       uint64 va = KSTACK((int) (p - proc));
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
+      p->kstackpa = (uint64)pa;
   }
   kvminithart();
 }
@@ -107,6 +108,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
 
+  //vmprint(retkernelpagetable());
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     release(&p->lock);
@@ -120,6 +122,10 @@ found:
     release(&p->lock);
     return 0;
   }
+  // init kernel page table
+  p->kernelpagetable = uvmkernel();
+  p->kernelsz = kernel_sz();
+  uvmkstack(p);
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -128,6 +134,15 @@ found:
   p->context.sp = p->kstack + PGSIZE;
 
   return p;
+}
+
+void
+uvmkstack(struct proc *p)
+{
+
+  if(mappages(p->kernelpagetable, p->kstack, PGSIZE, p->kstackpa, PTE_R | PTE_W) != 0)
+    panic("kernelpagetable mappages");
+
 }
 
 // free a proc structure and the data hanging from it,
@@ -141,7 +156,10 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->kernelpagetable)
+    freekernelpagetable(p->kernelpagetable);
   p->pagetable = 0;
+  p->kernelpagetable = 0;
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -473,11 +491,17 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+
+        w_satp(MAKE_SATP(p->kernelpagetable));
+        sfence_vma();
+
         swtch(&c->context, &p->context);
 
+        kvminithart();
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
+
 
         found = 1;
       }
@@ -486,6 +510,7 @@ scheduler(void)
 #if !defined (LAB_FS)
     if(found == 0) {
       intr_on();
+      kvminithart();
       asm volatile("wfi");
     }
 #else
