@@ -239,6 +239,7 @@ userinit(void)
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
+  kernelpagetablecopy(p);
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -260,13 +261,23 @@ growproc(int n)
   struct proc *p = myproc();
 
   sz = p->sz;
+
+  if (sz + n >PLIC)
+    return -1;
+  if (sz + n <0)
+    return -1;
+
   if(n > 0){
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    kernelpagetablegrow(p,n);
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    uvmdealloc_0(p->kernelpagetable,sz,sz+n);
+    //uvmunmap(p->kernelpagetable,PGROUNDUP(sz+n), (PGROUNDUP(sz) - PGROUNDUP(sz+n))/PGSIZE,0);
   }
+
   p->sz = sz;
   return 0;
 }
@@ -291,8 +302,12 @@ fork(void)
     release(&np->lock);
     return -1;
   }
+
+
   np->sz = p->sz;
 
+  // Copy user page to kernel page in child.
+  kernelpagetablecopy(np);
   np->parent = p;
 
   // copy saved user registers.
@@ -720,5 +735,30 @@ procdump(void)
       state = "???";
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
+  }
+}
+
+void
+kernelpagetablecopy(struct proc *p)
+{
+  // Trapframe mapping
+  //mappages(p->kernelpagetable,TRAPFRAME,PGSIZE,(uint64)p->trapframe,PTE_R | PTE_W);
+  // 
+  for (uint64 va=0;va <PGROUNDUP(p->sz) && va < PLIC;va += PGSIZE)
+  {
+    uint64 pa = walkaddr_removed(p->pagetable,va);
+    if (pa != 0)
+      mappages_removed(p->kernelpagetable,va,PGSIZE,pa,PTE_R | PTE_W);
+  }
+}
+
+void
+kernelpagetablegrow(struct proc *p,uint64 n)
+{
+  for (uint64 va=PGROUNDUP(p->sz);va < n+p->sz && va < PLIC;va += PGSIZE)
+  {
+    uint64 pa = walkaddr_removed(p->pagetable,va);
+    if (pa != 0)
+      mappages_removed(p->kernelpagetable,va,PGSIZE,pa,PTE_R | PTE_W);
   }
 }

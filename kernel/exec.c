@@ -114,7 +114,20 @@ exec(char *path, char **argv)
   p->sz = sz;
   p->trapframe->epc = elf.entry;  // initial program counter = main
   p->trapframe->sp = sp; // initial stack pointer
+  //vmprint(oldpagetable);
+  //freepage_kernel(oldpagetable,0,oldsz);
   proc_freepagetable(oldpagetable, oldsz);
+  //vmprint(oldpagetable);
+  
+
+  //freepage_kernel(p->kernelpagetable,0,oldsz);
+
+
+  // Delete old user page table mapping in kernel page table
+  uvmunmap_removed(p->kernelpagetable,0,PGROUNDUP(oldsz)/PGSIZE,0);
+
+  // Mapping kernel page talbe 
+  kernelpagetablecopy(p);
 
   if (p->pid ==1)
     vmprint(p->pagetable);

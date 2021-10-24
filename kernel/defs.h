@@ -86,12 +86,14 @@ void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
 // proc.c
+void            kernelpagetablegrow(struct proc *,uint64 );
+void            kernelpagetablecopy(struct proc *);
 int             cpuid(void);
 void            exit(int);
 int             fork(void);
 int             growproc(int);
 pagetable_t     proc_pagetable(struct proc *);
-void            uvmkstack(struct proc* p);
+void            uvmkstack(struct proc *);
 void            proc_freepagetable(pagetable_t, uint64);
 int             kill(int);
 struct cpu*     mycpu(void);
@@ -159,7 +161,12 @@ void            uartputc_sync(int);
 int             uartgetc(void);
 
 // vm.c
-void            freekernelpagetable(pagetable_t pagetable);
+int             mappages_removed(pagetable_t , uint64, uint64 , uint64 , int );
+void            freepage_kernel(pagetable_t ,uint64 ,uint64 );
+void            uvmdealloc_0(pagetable_t , uint64 , uint64 );
+void            uvmunmap_removed(pagetable_t , uint64 , uint64 , int );
+uint64          walkaddr_removed(pagetable_t , uint64 );
+void            freekernelpagetable(pagetable_t);
 uint64          kernel_sz();
 pagetable_t     retkernelpagetable();
 void            kvminit(void);
@@ -186,7 +193,8 @@ int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t);
 
 // vmcopyin.c
-int             copyin_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len);
+int             copyin_new(pagetable_t , char *, uint64 , uint64 );
+int             copyinstr_new(pagetable_t , char *, uint64 , uint64 );
 
 // plic.c
 void            plicinit(void);
