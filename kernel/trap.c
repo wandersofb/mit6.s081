@@ -78,7 +78,88 @@ usertrap(void)
 
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
+  {
+    myproc()->tick++;
     yield();
+  }
+  //sigalarm
+  if(myproc()->tick >= myproc()->tickhanlder && myproc()->tickhanlder && myproc()->isrun == 0)
+  {
+    myproc()->isrun = 1;
+    myproc()->tick = 0;
+    myproc()->epc = p->trapframe->epc;
+    myproc()->ra = p->trapframe->ra;
+    myproc()->sp = p->trapframe->sp;
+    myproc()->gp = p->trapframe->gp;
+    myproc()->tp = p->trapframe->tp;
+    myproc()->t0 = p->trapframe->t0;
+    myproc()->t1 = p->trapframe->t1;
+    myproc()->t2 = p->trapframe->t2;
+    myproc()->s0 = p->trapframe->s0;
+    myproc()->a0 = p->trapframe->a0;
+    myproc()->a1 = p->trapframe->a1;
+    myproc()->a2 = p->trapframe->a2;
+    myproc()->a3 = p->trapframe->a3;
+    myproc()->a4 = p->trapframe->a4;
+    myproc()->a5 = p->trapframe->a5;
+    myproc()->a6 = p->trapframe->a6;
+    myproc()->a7 = p->trapframe->a7;
+    myproc()->s2 = p->trapframe->s2;
+    myproc()->s3 = p->trapframe->s3;
+    myproc()->s4 = p->trapframe->s4;
+    myproc()->s5 = p->trapframe->s5;
+    myproc()->s6 = p->trapframe->s6;
+    myproc()->s7 = p->trapframe->s7;
+    myproc()->s8 = p->trapframe->s8;
+    myproc()->s9 = p->trapframe->s9;
+    myproc()->s10 = p->trapframe->s10;
+    myproc()->s11 = p->trapframe->s11;
+    myproc()->t3 = p->trapframe->t3;
+    myproc()->t4 = p->trapframe->t4;
+    myproc()->t5 = p->trapframe->t5;
+    myproc()->t6 = p->trapframe->t6;
+
+    p->trapframe->epc = myproc()->hanlder;
+  }
+  //sigreturn
+  if(myproc()->issigreturn == 1)
+  {
+    //uint64 persudoepc = myproc()->epc;   //
+    //uint64 efee = p->trapframe->epc;     //
+    //printf("%p\n%p\n",persudoepc,efee);
+    myproc()->isrun = 0;
+    p->trapframe->epc = myproc()->epc;
+
+    p->trapframe->ra =myproc()-> ra;
+    p->trapframe->sp =myproc()->sp;
+    p->trapframe->gp =myproc()->gp;
+    p->trapframe->tp =myproc()->tp;
+    p->trapframe->t0 =myproc()->t0;
+    p->trapframe->t1 =myproc()->t1;
+    p->trapframe->t2 =myproc()->t2;
+    p->trapframe->s0 =myproc()->s0;
+    p->trapframe->a0 =myproc()->a0;
+    p->trapframe->a1 =myproc()->a1;
+    p->trapframe->a2 =myproc()->a2;
+    p->trapframe->a3 =myproc()->a3;
+    p->trapframe->a4 =myproc()->a4;
+    p->trapframe->a5 =myproc()->a5;
+    p->trapframe->a6 =myproc()->a6;
+    p->trapframe->a7 =myproc()->a7;
+    p->trapframe->s2 =myproc()->s2;
+    p->trapframe->s3 =myproc()->s3;
+    p->trapframe->s4 =myproc()->s4;
+    p->trapframe->s5 =myproc()->s5;
+    p->trapframe->s6 =myproc()->s6;
+    p->trapframe->s7 =myproc()->s7;
+    p->trapframe->s8 =myproc()->s8;
+    p->trapframe->s9 =myproc()->s9;
+    p->trapframe->s10 =myproc()->s10;
+    p->trapframe->s11 =myproc()->s11;
+
+    myproc()->issigreturn =0;
+  }
+    
 
   usertrapret();
 }

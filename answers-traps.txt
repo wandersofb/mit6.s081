@@ -1,0 +1,4 @@
+a0,a1,a2 a2
+main don't call f and g, complier optimizes main.
+1536 or 630H
+38H
