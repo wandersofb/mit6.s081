@@ -253,6 +253,12 @@ growproc(int n)
   return 0;
 }
 
+
+uint64 
+psz(){
+return myproc()->sz;
+}
+
 // Create a new process, copying the parent.
 // Sets up child kernel stack to return as if from fork() system call.
 int

@@ -67,7 +67,40 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } else if (r_scause() == 15 || r_scause() == 13){
+    
+    uint64 va = r_stval();
+    //printf("page fault %p\n",va);
+    uint64 presentpage = PGROUNDDOWN(va);
+    if (va >= p->sz)
+    {
+      p->killed =1;
+      exit(-1);   
+    }
+
+    if (va <= p->trapframe->sp)
+    {
+      p->killed =1;
+      exit(-1);  
+    }
+    char *mem = kalloc();
+    if (mem == 0)
+    {
+      //printf("page fault: not enough memory\n");
+      p->killed =1;
+      exit(-1);
+    }
+    memset(mem,0,PGSIZE);
+    if (mappages(p->pagetable,presentpage,PGSIZE,(uint64)mem,PTE_W|PTE_X|PTE_R|PTE_U) != 0)
+    {
+      kfree(mem);
+      //printf("page fault: don't map page\n");
+      p->killed = 1;
+      exit(-1);
+    }
+
+  } 
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;

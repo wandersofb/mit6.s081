@@ -2074,8 +2074,11 @@ sbrkmuch(char *s)
 
   // can one grow address space to something big?
   a = sbrk(0);
+  //printf("a : %p\n",a);
   amt = BIG - (uint64)a;
+  //printf("amt : %p\n",amt);
   p = sbrk(amt);
+  //printf("p : %p\n",p);
   if (p != a) {
     printf("%s: sbrk test failed to grow big address space; enough phys mem?\n", s);
     exit(1);
@@ -2088,6 +2091,7 @@ sbrkmuch(char *s)
 
   lastaddr = (char*) (BIG-1);
   *lastaddr = 99;
+  //printf("lastaddr : %p",&lastaddr);
 
   // can one de-allocate?
   a = sbrk(0);
@@ -2097,6 +2101,7 @@ sbrkmuch(char *s)
     exit(1);
   }
   c = sbrk(0);
+  //printf("c : %p\n",c);
   if(c != a - PGSIZE){
     printf("%s: sbrk deallocation produced wrong address, a %x c %x\n", a, c);
     exit(1);
@@ -2105,6 +2110,7 @@ sbrkmuch(char *s)
   // can one re-allocate that page?
   a = sbrk(0);
   c = sbrk(PGSIZE);
+  //printf("c : %p\n",c);
   if(c != a || sbrk(0) != a + PGSIZE){
     printf("%s: sbrk re-allocation failed, a %x c %x\n", a, c);
     exit(1);
@@ -2396,7 +2402,9 @@ stacktest(char *s)
   pid = fork();
   if(pid == 0) {
     char *sp = (char *) r_sp();
+    //printf("sp : %p\n", (uint64)sp);
     sp -= PGSIZE;
+    //printf("sp : %p\n", (uint64)sp);
     // the *sp should cause a trap.
     printf("%s: stacktest: read below stack %p\n", *sp);
     exit(1);
