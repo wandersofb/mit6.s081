@@ -169,6 +169,26 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
+int
+mappages_remap(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
+{
+  uint64 a, last;
+  pte_t *pte;
+
+  a = PGROUNDDOWN(va);
+  last = PGROUNDDOWN(va + size - 1);
+  for(;;){
+    if((pte = walk(pagetable, a, 1)) == 0)
+      return -1;
+    *pte = PA2PTE(pa) | perm | PTE_V;
+    if(a == last)
+      break;
+    a += PGSIZE;
+    pa += PGSIZE;
+  }
+  return 0;
+}
+
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
@@ -177,6 +197,7 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
   uint64 a;
   pte_t *pte;
+  uint64 pa;
 
   if((va % PGSIZE) != 0)
     panic("uvmunmap: not aligned");
@@ -188,6 +209,9 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
+    pa = PTE2PA(*pte);
+    if(referCOW[retindex(pa)] && referCOW[retindex(pa)] != 0)
+      referCOW[retindex(pa)] -=1;
     if(do_free){
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
@@ -325,11 +349,11 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
     pa = PTE2PA(*pte);
     //add reference count
-    referCOW[retindex((void*)pa)] +=1;
+    referCOW[retindex(pa)] +=1;
     
     flags = PTE_FLAGS(*pte);
     //Set COW bit
-    flags = flags & ~PTE_COW;
+    flags = flags | PTE_COW;
     //if((mem = kalloc()) == 0)
       //goto err;
     //memmove(mem, (char*)pa, PGSIZE);
@@ -364,10 +388,27 @@ uvmclear(pagetable_t pagetable, uint64 va)
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
-  uint64 n, va0, pa0;
+  uint64 n, va0, pa0,pa;
+  pte_t* pte;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
+    pte = walk(pagetable,va0,0);
+    pa = PTE2PA(*pte);
+    if((*pte & PTE_COW) != 0)
+    {
+      char *mem = kalloc();
+      if (mem == 0)
+        return -1;
+      //copy old to new
+      memmove((void*)mem,(void*)pa,PGSIZE);
+      if (mappages_remap(pagetable,va0,PGSIZE,(uint64)mem,PTE_W|PTE_X|PTE_R|PTE_U) != 0)
+      {
+        kfree(mem);
+        return -1;
+      }
+    }
+    //
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
@@ -382,6 +423,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   }
   return 0;
 }
+
 
 // Copy from user to kernel.
 // Copy len bytes to dst from virtual address srcva in a given page table.

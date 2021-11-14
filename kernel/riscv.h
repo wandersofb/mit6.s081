@@ -355,4 +355,4 @@ typedef uint64 pte_t;
 typedef uint64 *pagetable_t; // 512 PTEs
 
 //Reference cocut
-#define COWref (((uint64)PHYSTOP - (uint64)end) / PGSIZE)
+#define COWref (((uint64)PHYSTOP - (uint64)KERNBASE) / PGSIZE)
