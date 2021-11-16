@@ -2161,18 +2161,25 @@ sbrkfail(char *s)
     printf("%s: pipe() failed\n", s);
     exit(1);
   }
+  //printf("xxxx\n");
   for(i = 0; i < sizeof(pids)/sizeof(pids[0]); i++){
+     //printf("o");
+     //printf("%d",sizeof(pids)/sizeof(pids[0]));
     if((pids[i] = fork()) == 0){
       // allocate a lot of memory
+      //printf("a");
       sbrk(BIG - (uint64)sbrk(0));
+      //printf("s");
       write(fds[1], "x", 1);
+      //printf("d");
       // sit around until killed
       for(;;) sleep(1000);
     }
+    //printf("o");
     if(pids[i] != -1)
       read(fds[0], &scratch, 1);
   }
-
+  //printf("xxxx\n");
   // if those failed allocations freed up the pages they did allocate,
   // we'll be able to allocate here
   c = sbrk(PGSIZE);

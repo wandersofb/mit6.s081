@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -14,8 +16,6 @@ pagetable_t kernel_pagetable;
 extern char etext[];  // kernel.ld sets this to end of kernel code.
 
 extern char trampoline[]; // trampoline.S
-
-extern int referCOW[];
 
 /*
  * create a direct-map page table for the kernel.
@@ -169,26 +169,6 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   return 0;
 }
 
-int
-mappages_remap(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
-{
-  uint64 a, last;
-  pte_t *pte;
-
-  a = PGROUNDDOWN(va);
-  last = PGROUNDDOWN(va + size - 1);
-  for(;;){
-    if((pte = walk(pagetable, a, 1)) == 0)
-      return -1;
-    *pte = PA2PTE(pa) | perm | PTE_V;
-    if(a == last)
-      break;
-    a += PGSIZE;
-    pa += PGSIZE;
-  }
-  return 0;
-}
-
 // Remove npages of mappings starting from va. va must be
 // page-aligned. The mappings must exist.
 // Optionally free the physical memory.
@@ -197,7 +177,6 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 {
   uint64 a;
   pte_t *pte;
-  uint64 pa;
 
   if((va % PGSIZE) != 0)
     panic("uvmunmap: not aligned");
@@ -209,9 +188,6 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
       panic("uvmunmap: not mapped");
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
-    pa = PTE2PA(*pte);
-    if(referCOW[retindex(pa)] && referCOW[retindex(pa)] != 0)
-      referCOW[retindex(pa)] -=1;
     if(do_free){
       uint64 pa = PTE2PA(*pte);
       kfree((void*)pa);
@@ -325,47 +301,34 @@ uvmfree(pagetable_t pagetable, uint64 sz)
   freewalk(pagetable);
 }
 
-// Given a parent process's page table, copy
-// its memory into a child's page table.
-// Copies both the page table and the
-// physical memory.
-// returns 0 on success, -1 on failure.
-// frees any allocated pages on failure.
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
   pte_t *pte;
   uint64 pa, i;
   uint flags;
-  //char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
-    //Clear PTE_W
-    *pte = *pte & ~PTE_W;
-
     pa = PTE2PA(*pte);
-    //add reference count
-    referCOW[retindex(pa)] +=1;
-    
+    // 清除父进程的 PTE_W 标志位，设置 PTE_COW 标志位表示是一个懒复制页（多个进程引用同个物理页）
+    *pte = (*pte & ~PTE_W) | PTE_COW;
     flags = PTE_FLAGS(*pte);
-    //Set COW bit
-    flags = flags | PTE_COW;
-    //if((mem = kalloc()) == 0)
-      //goto err;
-    //memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, pa, flags) != 0){
-      //kfree(mem);
+    // 将父进程的物理页直接 map 到子进程 （懒复制）
+    // 权限设置和父进程一致（不可写，PTE_COW）
+    if(mappages(new, i, PGSIZE, (uint64)pa, flags) != 0){
       goto err;
     }
+    // 将物理页的引用次数增加 1
+    krefpage((void*)pa);
   }
   return 0;
 
  err:
-  uvmunmap(new, 0, i / PGSIZE, 0);
+  uvmunmap(new, 0, i / PGSIZE, 1);
   return -1;
 }
 
@@ -388,27 +351,13 @@ uvmclear(pagetable_t pagetable, uint64 va)
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
-  uint64 n, va0, pa0,pa;
-  pte_t* pte;
+  uint64 n, va0, pa0;
+
+  if(uvmcheckcowpage(dstva))
+    uvmcowcopy(dstva);
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pte = walk(pagetable,va0,0);
-    pa = PTE2PA(*pte);
-    if((*pte & PTE_COW) != 0)
-    {
-      char *mem = kalloc();
-      if (mem == 0)
-        return -1;
-      //copy old to new
-      memmove((void*)mem,(void*)pa,PGSIZE);
-      if (mappages_remap(pagetable,va0,PGSIZE,(uint64)mem,PTE_W|PTE_X|PTE_R|PTE_U) != 0)
-      {
-        kfree(mem);
-        return -1;
-      }
-    }
-    //
     pa0 = walkaddr(pagetable, va0);
     if(pa0 == 0)
       return -1;
@@ -491,4 +440,37 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+int uvmcheckcowpage(uint64 va) {
+  pte_t *pte;
+  struct proc *p = myproc();
+  
+  return va < p->sz // within size of memory for the process
+    && ((pte = walk(p->pagetable, va, 0))!=0)
+    && (*pte & PTE_V) // page table entry exists
+    && (*pte & PTE_COW); // page is a cow page
+}
+
+// Copy the cow page, then map it as writable
+int uvmcowcopy(uint64 va) {
+  pte_t *pte;
+  struct proc *p = myproc();
+
+  if((pte = walk(p->pagetable, va, 0)) == 0)
+    panic("uvmcowcopy: walk");
+  
+  // copy the cow page
+  // (no copying will take place if reference count is already 1)
+  uint64 pa = PTE2PA(*pte);
+  uint64 new = (uint64)kcopy_n_deref((void*)pa);
+  if(new == 0)
+    return -1;
+  
+  // map as writable, remove the cow flag
+  uint64 flags = (PTE_FLAGS(*pte) | PTE_W) & ~PTE_COW;
+  uvmunmap(p->pagetable, PGROUNDDOWN(va), 1, 0);
+  if(mappages(p->pagetable, va, 1, new, flags) == -1) {
+    panic("uvmcowcopy: mappages");
+  }
+  return 0;
 }
