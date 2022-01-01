@@ -67,7 +67,15 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else {
+  } else if (r_scause() == 13 || r_scause() == 15){
+    uint64 va = r_stval();
+    //printf("va : %p\n",va);
+    if (ret_VMA_SIZE_T(va) != -1){
+      //printf("vma_t : %d\n",ret_VMA_SIZE_T(va));
+      mmap_trap(PGROUNDDOWN(va));
+    }
+  }
+  else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
@@ -217,4 +225,3 @@ devintr()
     return 0;
   }
 }
-

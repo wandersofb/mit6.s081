@@ -60,7 +60,7 @@ void
 makefile(const char *f)
 {
   int i;
-  int n = PGSIZE/BSIZE;
+  int n = PGSIZE/BSIZE;   //4
 
   unlink(f);
   int fd = open(f, O_WRONLY | O_CREATE);
@@ -111,6 +111,7 @@ mmap_test(void)
   // offset in the file.
   //
   char *p = mmap(0, PGSIZE*2, PROT_READ, MAP_PRIVATE, fd, 0);
+  //printf("p : %p\n",p);
   if (p == MAP_FAILED)
     err("mmap (1)");
   _v1(p);
@@ -123,16 +124,18 @@ mmap_test(void)
   // should be able to map file opened read-only with private writable
   // mapping
   p = mmap(0, PGSIZE*2, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+ 
   if (p == MAP_FAILED)
     err("mmap (2)");
   if (close(fd) == -1)
     err("close");
+
   _v1(p);
+
   for (i = 0; i < PGSIZE*2; i++)
     p[i] = 'Z';
   if (munmap(p, PGSIZE*2) == -1)
     err("munmap (2)");
-
   printf("test mmap private: OK\n");
     
   printf("test mmap read-only\n");
@@ -142,6 +145,7 @@ mmap_test(void)
   if ((fd = open(f, O_RDONLY)) == -1)
     err("open");
   p = mmap(0, PGSIZE*3, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  
   if (p != MAP_FAILED)
     err("mmap call should have failed");
   if (close(fd) == -1)
@@ -211,10 +215,12 @@ mmap_test(void)
   if(write(fd1, "12345", 5) != 5)
     err("write mmap1");
   char *p1 = mmap(0, PGSIZE, PROT_READ, MAP_PRIVATE, fd1, 0);
+  //printf("p1 : %p\n",p1);
   if(p1 == MAP_FAILED)
     err("mmap mmap1");
   close(fd1);
   unlink("mmap1");
+  
 
   int fd2;
   if((fd2 = open("mmap2", O_RDWR|O_CREATE)) < 0)
@@ -222,17 +228,21 @@ mmap_test(void)
   if(write(fd2, "67890", 5) != 5)
     err("write mmap2");
   char *p2 = mmap(0, PGSIZE, PROT_READ, MAP_PRIVATE, fd2, 0);
+  //printf("p2 : %p\n",p2);
   if(p2 == MAP_FAILED)
     err("mmap mmap2");
   close(fd2);
   unlink("mmap2");
 
+  //printf("unmap\n");  
   if(memcmp(p1, "12345", 5) != 0)
     err("mmap1 mismatch");
   if(memcmp(p2, "67890", 5) != 0)
     err("mmap2 mismatch");
 
+  //printf("unmap\n");
   munmap(p1, PGSIZE);
+  printf("unp1");
   if(memcmp(p2, "67890", 5) != 0)
     err("mmap2 mismatch (2)");
   munmap(p2, PGSIZE);

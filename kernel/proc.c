@@ -5,6 +5,8 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
+//#include "file.h"
 
 struct cpu cpus[NCPU];
 
@@ -48,6 +50,8 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->kstack = KSTACK((int) (p - proc));
+      for (int i =0;i < 16;i++)
+        p->vma[i].length = 0;
   }
 }
 
@@ -301,6 +305,9 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+
+  //
+  //memmove(np->vma,p->vma,sizeof(p->vma)*16);
 
   release(&np->lock);
 
@@ -701,3 +708,68 @@ procdump(void)
     printf("\n");
   }
 }
+
+uint64
+fmmap(int length,int prot,int flags,struct file *f,int offset){
+
+  struct proc *p = myproc();
+  uint64 addr = p->sz;
+  for (int i = 0; i < 16;i++){
+    if (p->vma[i].length ==0){
+      p->vma[i].address = p->sz;
+      p->vma[i].length = length;
+      p->vma[i].prot = prot;
+      p->vma[i].flags = flags;
+      p->vma[i].offset = offset;
+      p->vma[i].f = filedup(f);
+      break;
+      //p->vma[i].eqlength = 0;
+    }
+  }
+
+  p->sz += length;
+  return addr;
+}
+
+int
+ret_VMA_SIZE_T(uint64 va){
+  struct proc *p = myproc();
+  for(int i =0;i<16;i++){
+    if (p->vma[i].address <= va && p->vma[i].address+p->vma[i].length > va){
+      return i;
+    }
+  }
+  return -1;
+}
+
+uint64
+funmmap(uint64 addr,int length){
+  struct proc *p = myproc();
+  uint64 py;
+  int x = ret_VMA_SIZE_T(addr);
+  struct VMA *q = &(p->vma[x]);
+  if ((q->flags & MAP_SHARED) != 0)
+    filewrite(q->f,q->address,q->length);
+  
+  if (addr == q->address){
+    q->address +=length;
+    q->length -=length;
+  }
+  if (addr > q->address){
+    q->length -=length;
+  }
+
+
+  for (int i =0;i < length; i += PGSIZE ){
+    if ( (py = walkaddr(p->pagetable,addr+i)) != 0){
+      //printf("py : %p\n",py);
+      uvmunmap(p->pagetable,addr+i,1,1);
+    }
+  }
+  
+  if (q->length == 0)
+    q->f = filedown(q->f);
+  return 0;
+}
+
+

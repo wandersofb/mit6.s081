@@ -12,6 +12,7 @@
 #include "file.h"
 #include "stat.h"
 #include "proc.h"
+#include "fcntl.h"
 
 struct devsw devsw[NDEV];
 struct {
@@ -51,6 +52,17 @@ filedup(struct file *f)
   if(f->ref < 1)
     panic("filedup");
   f->ref++;
+  release(&ftable.lock);
+  return f;
+}
+// Decrement ref count for file f.
+struct file*
+filedown(struct file *f)
+{
+  acquire(&ftable.lock);
+  if(f->ref < 1)
+    panic("filedup");
+  f->ref--;
   release(&ftable.lock);
   return f;
 }
@@ -178,5 +190,36 @@ filewrite(struct file *f, uint64 addr, int n)
   }
 
   return ret;
+}
+
+void
+mmap_trap(uint64 va){
+    int r =0;
+    struct proc *p = myproc();
+    int x = ret_VMA_SIZE_T(va);
+    struct VMA q = p->vma[x];
+
+    int prot = q.prot;
+    //int flags = q.flags;
+    int off = va - q.address;
+
+    //printf("off : %d\n",off);
+    //vmprint(p->pagetable);
+    char *pa = kalloc();
+    if(pa == 0)
+      panic("kalloc");
+    memset(pa,0,PGSIZE);
+
+    if(mappages(p->pagetable, va, PGSIZE, (uint64)pa, prot|PTE_U) != 0)
+      panic("mmap_mappages");
+    //if(walkaddr(p->pagetable,va) == 0)
+      //panic("mmap_walkaddr");
+
+    //vmprint(p->pagetable);
+    ilock(q.f->ip);
+    if ((r = readi(q.f->ip, 1, va, off+q.offset, PGSIZE)) > 0)
+      //q.offset += r;
+    iunlock(q.f->ip);   
+
 }
 
