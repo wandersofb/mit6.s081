@@ -192,6 +192,7 @@ int             ret_VMA_SIZE_T(uint64);
 void            mmap_trap(uint64);
 uint64          funmmap(uint64 addr,int length);
 struct file*    filedown(struct file *f);
+int             mmuvmcopy(pagetable_t old, pagetable_t new, uint64 sz);
 
 
 // number of elements in fixed-size array

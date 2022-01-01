@@ -242,7 +242,7 @@ mmap_test(void)
 
   //printf("unmap\n");
   munmap(p1, PGSIZE);
-  printf("unp1");
+  //printf("unp1");
   if(memcmp(p2, "67890", 5) != 0)
     err("mmap2 mismatch (2)");
   munmap(p2, PGSIZE);
@@ -284,9 +284,13 @@ fork_test(void)
 
   if((pid = fork()) < 0)
     err("fork");
+
   if (pid == 0) {
+    //printf("p1\n");
     _v1(p1);
+    //printf("p1\n");
     munmap(p1, PGSIZE); // just the first page
+    //printf("p1\n");
     exit(0); // tell the parent that the mapping looks OK.
   }
 

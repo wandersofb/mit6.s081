@@ -279,7 +279,7 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+  if(mmuvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
     release(&np->lock);
     return -1;
@@ -306,8 +306,11 @@ fork(void)
 
   np->state = RUNNABLE;
 
-  //
-  //memmove(np->vma,p->vma,sizeof(p->vma)*16);
+  for (int i =0;i < 16;i++)
+    if (p->vma[i].length !=0)
+      p->vma[i].f = filedup(p->vma[i].f);
+  
+  memmove(np->vma, p->vma, sizeof(struct VMA)*16);
 
   release(&np->lock);
 
@@ -357,6 +360,16 @@ exit(int status)
       struct file *f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
+    }
+  }
+
+  //
+  for (int i =0;i < 16;i++){
+    if (p->vma[i].length !=0){
+      //funmmap(p->vma[i].address,p->vma[i].length);
+      //fileclose(p->vma[i].f);
+      uvmunmap(p->pagetable,p->vma[i].address,p->vma[i].length/PGSIZE,0);
+      memset(p,0,sizeof(struct VMA));
     }
   }
 
@@ -762,7 +775,6 @@ funmmap(uint64 addr,int length){
 
   for (int i =0;i < length; i += PGSIZE ){
     if ( (py = walkaddr(p->pagetable,addr+i)) != 0){
-      //printf("py : %p\n",py);
       uvmunmap(p->pagetable,addr+i,1,1);
     }
   }

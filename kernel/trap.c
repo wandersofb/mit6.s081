@@ -74,6 +74,8 @@ usertrap(void)
       //printf("vma_t : %d\n",ret_VMA_SIZE_T(va));
       mmap_trap(PGROUNDDOWN(va));
     }
+    else
+      p->killed = 1;
   }
   else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);

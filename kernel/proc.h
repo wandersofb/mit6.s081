@@ -90,7 +90,6 @@ struct VMA{
   int flags;
   int offset;
   struct file *f;
-  //int eqlength;
 };
 
 
